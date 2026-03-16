@@ -20,6 +20,8 @@ git fetch --all
 git reset --hard origin/$BRANCH
 git pull origin $BRANCH
 
+chmod 777 -R  $PROJECT_PATH
+
 echo "========================================"
 echo ">>> 2. 使用 Docker 多阶段构建镜像 (Java 21)"
 echo "========================================"
