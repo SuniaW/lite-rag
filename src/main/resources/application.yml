@@ -1,11 +1,12 @@
 spring:
   application:
     name: spring-ai-rag
-
+  threads:
+    virtual:
+      enabled: true
   mvc:
     async:
       request-timeout: 600000  # 设置为 60 秒，确保比业务代码的 30s 长
-
   ai:
     ollama:
       # 远程 Ollama 地址
@@ -27,6 +28,9 @@ spring:
         collection-name: policy_docs
         embedding-dimension: 1024
         # database-name: default
+
+spring.datasource.hikari.maximum-pool-size: 5
+spring.datasource.hikari.minimum-idle: 2
 
 server:
   port: 8081
