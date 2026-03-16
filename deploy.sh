@@ -45,6 +45,7 @@ echo "========================================"
 docker run -d \
   --name $APP_NAME \
   -p $APP_PORT:8081 \
+  -e CLOUD_IP=$CLOUD_IP \
   --memory="256m" \
   --memory-swap="512m" \
   --restart always \
