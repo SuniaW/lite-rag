@@ -1,6 +1,15 @@
 #!/bin/bash
 
 # ==========================================
+# 关键修复：显式加载环境变量
+# ==========================================
+# 这一步确保脚本能读取到你在 /etc/environment 里配置的 CLOUD_IP 和 OPENAI_API_KEY
+source /etc/environment
+
+# 打印一下，确保脚本执行时拿到了值（调试用）
+echo ">>> 检查环境变量: CLOUD_IP=$CLOUD_IP"
+
+# ==========================================
 # 配置参数
 # ==========================================
 APP_NAME="spring-ai-rag"  # 容器名称
@@ -47,7 +56,8 @@ echo "========================================"
 docker run -d \
   --name $APP_NAME \
   -p $APP_PORT:8081 \
-  -e CLOUD_IP=$CLOUD_IP \
+  -e CLOUD_IP="$CLOUD_IP" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
   --memory="256m" \
   --memory-swap="512m" \
   --restart always \
