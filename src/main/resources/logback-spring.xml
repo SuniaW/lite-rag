@@ -1,67 +1,83 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- 引入 Spring Boot 默认的颜色和格式设置 -->
+    <!-- 1. 引入 Spring Boot 默认设置 -->
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <!-- 定义日志存储路径 -->
+    <!-- 定义日志路径 -->
     <property name="LOG_PATH" value="logs" />
     <property name="APP_NAME" value="rag-system" />
 
-    <!-- 1. 控制台输出 -->
+    <!-- 2. 控制台输出：仅保留 INFO 以上，防止生产环境控制台刷屏 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
         <encoder>
             <pattern>${CONSOLE_LOG_PATTERN}</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
 
-    <!-- 2. 按天滚动输出所有日志 -->
-    <appender name="FILE_DAILY" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <!-- 3. 全量 INFO 日志：采用滚动策略 -->
+    <appender name="FILE_INFO" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}/${APP_NAME}.log</file>
         <encoder>
             <pattern>${FILE_LOG_PATTERN}</pattern>
             <charset>UTF-8</charset>
         </encoder>
-        <!-- 滚动策略：按时间和大小 -->
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <!-- 每天生成的日志文件名格式 -->
-            <fileNamePattern>${LOG_PATH}/${APP_NAME}-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
-            <!-- 每个文件最大100MB -->
-            <maxFileSize>100MB</maxFileSize>
-            <!-- 保留30天 -->
-            <maxHistory>30</maxHistory>
-            <!-- 总体量最大3GB -->
-            <totalSizeCap>3GB</totalSizeCap>
+            <fileNamePattern>${LOG_PATH}/archived/${APP_NAME}-info-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize> <!-- 缩小单文件大小，方便在 Linux 上通过 vim 查看 -->
+            <maxHistory>15</maxHistory>     <!-- 生产环境保留 15 天足够，节省磁盘 -->
+            <totalSizeCap>1GB</totalSizeCap> <!-- 限制总占用为 1GB -->
         </rollingPolicy>
     </appender>
 
-    <!-- （可选）3. 单独按天记录 ERROR 级别的日志 -->
+    <!-- 4. 异常 ERROR 日志：独立存储，方便报警扫描 -->
     <appender name="FILE_ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}/${APP_NAME}-error.log</file>
         <encoder>
             <pattern>${FILE_LOG_PATTERN}</pattern>
             <charset>UTF-8</charset>
         </encoder>
-        <!-- 过滤掉非 ERROR 级别的日志 -->
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>ERROR</level>
         </filter>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_PATH}/${APP_NAME}-error-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
-            <maxFileSize>100MB</maxFileSize>
-            <maxHistory>60</maxHistory> <!-- 错误日志保留时间长一点 -->
+            <fileNamePattern>${LOG_PATH}/archived/${APP_NAME}-error-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
         </rollingPolicy>
     </appender>
 
-    <!-- 配置你的包的 DEBUG 级别 -->
-    <logger name="com.wx.rag" level="DEBUG" />
-    <logger name="org.springframework.ai" level="DEBUG" />
-    <logger name="io.milvus" level="DEBUG" />
+    <!-- 5. 核心优化：异步输出日志 (ASYNC) -->
+    <!-- 针对 2核4G 服务器，异步日志可以极大地减少磁盘 I/O 等待对业务线程的影响 -->
+    <appender name="ASYNC_INFO" class="ch.qos.logback.classic.AsyncAppender">
+        <discardingThreshold>0</discardingThreshold> <!-- 不丢失日志 -->
+        <queueSize>256</queueSize>                  <!-- 队列大小，防止占用过多内存 -->
+        <appender-ref ref="FILE_INFO" />
+    </appender>
 
-    <!-- 根节点配置 -->
-    <root level="DEBUG">
-        <appender-ref ref="CONSOLE" />
-        <appender-ref ref="FILE_DAILY" />
+    <appender name="ASYNC_ERROR" class="ch.qos.logback.classic.AsyncAppender">
         <appender-ref ref="FILE_ERROR" />
+    </appender>
+
+    <!-- 6. 精细化包级别配置 -->
+    <!-- 生产环境下，框架类日志一律用 INFO，业务类和关键 AI 流程可用 DEBUG（视排查需求而定） -->
+    <logger name="com.wx.rag" level="DEBUG" />          <!-- 业务代码 -->
+    <logger name="org.springframework.ai" level="INFO" /> <!-- AI 框架：设为 INFO，否则会打印大量 Prompt 细节，撑爆日志 -->
+    <logger name="io.milvus" level="INFO" />            <!-- Milvus 驱动 -->
+
+    <!-- 彻底禁用一些极其啰嗦的库 -->
+    <logger name="org.apache.catalina" level="WARN" />
+    <logger name="org.apache.tomcat" level="WARN" />
+
+    <!-- 7. 根节点配置 -->
+    <!-- 生产环境下 root 必须是 INFO -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_INFO" />
+        <appender-ref ref="ASYNC_ERROR" />
     </root>
+
 </configuration>
