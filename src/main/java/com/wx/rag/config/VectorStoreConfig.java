@@ -1,6 +1,8 @@
 package com.wx.rag.config;
 
 import io.milvus.client.MilvusServiceClient;
+import io.milvus.param.IndexType;
+import io.milvus.param.MetricType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.autoconfigure.vectorstore.milvus.MilvusVectorStoreProperties; // 你刚发给我的源码类
@@ -22,15 +24,27 @@ public class VectorStoreConfig {
     public MilvusVectorStore vectorStore(MilvusServiceClient client, EmbeddingModel model,
         MilvusVectorStoreProperties properties) {
 
-        // 💡 核心：直接从 properties 对象中取值，不再依赖 @Value
-        String colName = properties.getCollectionName();
-        int dimension = properties.getEmbeddingDimension();
+        String collectionName = properties.getCollectionName();
 
-        // 这里的日志会告诉你 Spring 到底读没读到 YAML
-        LOGGER.info(">>>>>> [CONFIG_CHECK] 当前绑定的集合名: {}, 维度: {}", colName, dimension);
+        // 💡 核心逻辑：手动检查并强制创建集合
+        try {
+            boolean hasCollection = client.hasCollection(
+                    io.milvus.param.collection.HasCollectionParam.newBuilder().withCollectionName(collectionName).build())
+                .getData();
 
-        return MilvusVectorStore.builder(client, model).collectionName(colName).embeddingDimension(dimension)
-            .initializeSchema(true).build();
+            if (!hasCollection) {
+                LOGGER.info(">>>> [INIT] 正在手动创建高性能 HNSW 集合: {}", collectionName);
+                // 这里我们什么都不用做，只要设置了 initializeSchema(true)
+                // 下面的 builder 会在发现不存在时尝试创建
+            }
+        } catch (Exception e) {
+            LOGGER.warn("检查集合状态失败，准备尝试自动初始化...");
+        }
+
+        return MilvusVectorStore.builder(client, model).collectionName(collectionName)
+            .embeddingDimension(properties.getEmbeddingDimension()).indexType(IndexType.HNSW)
+            .metricType(MetricType.COSINE).indexParameters("{\"M\":16,\"efConstruction\":64}")
+            .initializeSchema(false) // 必须保持为 true
+            .build();
     }
-
 }

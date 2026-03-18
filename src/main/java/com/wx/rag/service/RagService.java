@@ -25,8 +25,9 @@ public class RagService {
     private static final String SYSTEM_PROMPT = """
         你是专业架构师。请基于背景资料回答，要求：
         1. Markdown 格式。标题前空行。
-        2. 代码使用三反引号并注语言。
-        3. 资料未提及则告知不知道。
+        2. 禁止使用任何代码块（即禁止使用 ```）来包裹你的文字回答。
+        3. 只有在展示真实的 Linux 命令或代码片段时，才允许对该段代码使用三反引号。
+        4. 资料未提及则告知不知道。
         """;
 
     public RagService(ChatClient.Builder chatClientBuilder, VectorStore vectorStore) {
