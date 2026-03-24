@@ -17,8 +17,8 @@ public class AiConfig {
     // 2. 流式天气客户端：去掉自我修正，用于 .stream()
     @Bean
     public ChatClient weatherStreamingChatClient(OpenAiChatModel openAiChatModel) { // 💡 显式注入 OpenAI 模型
-        return ChatClient.builder(openAiChatModel).defaultSystem("你是一个专业的气象助手。请直接、简洁地回答天气情况。")
-            .defaultTools("weatherFunction") // 💡 关联上面定义的天气函数名
+        return ChatClient.builder(openAiChatModel).defaultSystem("你是一个专业的气象助手。请友好地回答天气情况。")
+            .defaultTools("weatherFunctionBean") // 💡 关联上面定义的天气函数名
             .build();
     }
 }
