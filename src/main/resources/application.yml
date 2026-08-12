@@ -10,7 +10,7 @@ spring:
   ai:
     ollama:
       # 远程 Ollama 地址
-      base-url: http://8.140.221.150:11434
+      base-url: http://124.223.22.34:11434
       chat:
         model: qwen2.5:1.5b
         options:
@@ -22,7 +22,7 @@ spring:
     vectorstore:
       milvus:
         client:
-          host: 8.140.221.150
+          host: 110.40.177.238
           port: 19530
         # 即使你在 Java 代码里写死了，这里保留配置也是好习惯
         collection-name: policy_docs
