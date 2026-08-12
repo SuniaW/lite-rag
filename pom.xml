@@ -4,10 +4,11 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- Spring Boot 3.5.15：Spring AI 1.1.8 官方配套版本 -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.3</version>
+        <version>3.5.15</version>
         <relativePath/>
     </parent>
 
@@ -15,11 +16,11 @@
     <artifactId>spring-ai-rag</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>spring-ai-rag</name>
-    <description>Based on Spring Boot 3.4 + Spring AI + Milvus</description>
+    <description>Based on Spring Boot 3.5.15 + Spring AI 1.1.8 + Milvus + MCP Server</description>
 
     <properties>
         <java.version>21</java.version>
-        <!-- Removed manual lombok version to let Spring Boot manage it -->
+        <spring-ai.version>1.1.8</spring-ai.version>
     </properties>
 
     <dependencyManagement>
@@ -27,7 +28,7 @@
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
-                <version>1.0.0-M6</version>
+                <version>${spring-ai.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -35,6 +36,7 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Web 与响应式基础 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -45,27 +47,45 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
+        <!-- =============================================================
+             Spring AI 1.1.x 全家桶（starter 在 1.1.x 已统一改名为
+             spring-ai-starter-model-* / spring-ai-starter-vector-store-*）
+             ============================================================= -->
+        <!-- Ollama：本地私有化模型（Qwen2.5 等） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-ollama-spring-boot-starter</artifactId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
         </dependency>
 
+        <!-- Milvus 向量库 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-milvus-store-spring-boot-starter</artifactId>
+            <artifactId>spring-ai-starter-vector-store-milvus</artifactId>
         </dependency>
 
+        <!-- Tika 文档解析：PDF/Word/Excel 等 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-tika-document-reader</artifactId>
         </dependency>
 
+        <!-- OpenAI 兼容接口（DeepSeek / 智谱 / SiliconFlow 等） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
 
-        <!-- Removed version tag, Spring Boot manages the correct version -->
+        <!-- =============================================================
+             MCP Server（关键新增）：把本应用的 @Tool 工具发布为 MCP 工具
+             - WebMVC 传输层（Streamable HTTP / SSE / Stateless）
+             - 自动收集上下文中的 ToolCallbackProvider / ToolCallback Bean
+             - 默认端点：/mcp
+             ============================================================= -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -78,24 +98,12 @@
             <scope>test</scope>
         </dependency>
 
-
         <dependency>
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <repositories>
-        <repository>
-            <id>spring-milestones</id>
-            <name>Spring Milestones</name>
-            <url>https://repo.spring.io/milestone</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
     <build>
         <plugins>
@@ -105,7 +113,9 @@
                 <configuration>
                     <source>${java.version}</source>
                     <target>${java.version}</target>
-                    <!-- Added Annotation Processor Path for Lombok -->
+                    <!-- 关键：保留方法参数名。@Tool/@ToolParam 需要真实参数名
+                         （如 location）来生成正确的 JSON Schema，否则 MCP 工具参数会变成 arg0 -->
+                    <parameters>true</parameters>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>

@@ -10,7 +10,7 @@ spring:
   ai:
     ollama:
       # 远程 Ollama 地址
-      base-url: http://${CLOUD_IP}:11434
+      base-url: http://8.140.221.150:11434
       chat:
         model: qwen2.5:1.5b
         options:
@@ -22,19 +22,37 @@ spring:
     vectorstore:
       milvus:
         client:
-          host: ${CLOUD_IP}
+          host: 8.140.221.150
           port: 19530
         # 即使你在 Java 代码里写死了，这里保留配置也是好习惯
         collection-name: policy_docs
         embedding-dimension: 1024
         # database-name: default
     openai:
-      api-key: ${OPENAI_API_KEY}  # 👈 从环境变量 OPENAI_API_KEY 读取
+      api-key: sk-41ff1d3510d540179bd99fde2160502c  # 👈 从环境变量 OPENAI_API_KEY 读取
       base-url: https://api.deepseek.com  # 👈 关键！必须添加
       chat:
         options:
           model: deepseek-chat
           temperature: 0.7
+    # =============================================================
+    # MCP Server 配置：把 @Tool 工具发布为 MCP 工具
+    # 协议可选：STATELESS（无状态，推荐）/ STREAMABLE / SSE
+    # 客户端接入：MCP Streamable HTTP 客户端连接 http://<host>:8081/mcp
+    # =============================================================
+    mcp:
+      server:
+        enabled: true
+        protocol: STATELESS
+        name: spring-ai-rag-mcp
+        version: 1.0.0
+        type: SYNC
+        capabilities:
+          tool: true        # 发布工具（getWeather / searchKnowledgeBase）
+          resource: false   # 不发布资源
+          prompt: false     # 不发布提示词
+        streamable-http:
+          mcp-endpoint: /mcp  # 无状态/流式 HTTP 传输端点（1.1.x 属性前缀）
   servlet:
     multipart:
       # 单个文件的最大限制 (根据你的需求调整，例如 50MB)

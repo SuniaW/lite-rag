@@ -2,7 +2,7 @@
 
 # Enterprise-RAG: 企业级全栈智能问答系统实施指南
 
-![Spring AI](https://img.shields.io/badge/Spring%20AI-1.0.0--GA-blue) ![Milvus](https://img.shields.io/badge/Milvus-2.6.0-orange) ![Ollama](https://img.shields.io/badge/Ollama-Latest-lightgrey) ![Vue3](https://img.shields.io/badge/Vue-3.4-green) ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
+![Spring AI](https://img.shields.io/badge/Spring%20AI-1.1.8-blue) ![Milvus](https://img.shields.io/badge/Milvus-2.6.0-orange) ![Ollama](https://img.shields.io/badge/Ollama-Latest-lightgrey) ![Vue3](https://img.shields.io/badge/Vue-3.4-green) ![Docker](https://img.shields.io/badge/Docker-Ready-blue)
 
 本项目是一个生产就绪的 **RAG（Retrieval-Augmented Generation，检索增强生成）** 全栈解决方案。它不仅涵盖了从文档解析、向量存储到大模型调用的完整链路，还特别针对**低配服务器（如阿里云 2C4G 实例）**进行了深度性能调优，确保在有限资源下实现秒级响应。
 
@@ -38,8 +38,8 @@ graph TD
 
 | 组件 | 技术选型 | 说明 |
 | :--- | :--- | :--- |
-| **后端框架** | Spring Boot 3.4.3 | 核心业务逻辑与生态集成 |
-| **AI 框架** | Spring AI 1.0.0-GA | 统一 AI 接口，简化 RAG 开发 |
+| **后端框架** | Spring Boot 3.5.15 | 核心业务逻辑与生态集成 |
+| **AI 框架** | Spring AI 1.1.8 | 统一 AI 接口，简化 RAG 开发，内置 MCP Server 支持 |
 | **向量数据库** | Milvus v2.6.0 | 高性能、存算分离的向量存储 |
 | **推理引擎** | Ollama | 本地大模型运行平台 |
 | **前端框架** | Vue 3 + Vite | 响应式 UI 与流式渲染 |
@@ -112,7 +112,81 @@ spring:
 
 ---
 
-## 🔗 项目资源与开源贡献
+## 🤖 MCP Server（Model Context Protocol）
+
+本工程已升级为 **Spring AI 1.1.8**，并把内部工具通过 **MCP（Model Context Protocol）** 发布为标准化工具，任何 MCP 客户端（Claude Desktop、Cursor、Cherry Studio、其他 Agent 框架）都可以直接调用。
+
+### 已发布的工具
+
+| 工具名 | 说明 | 参数 |
+| :--- | :--- | :--- |
+| getWeather | 查询指定中国城市的实时天气（高德 API） | location：城市名称，如 西安 |
+| searchKnowledgeBase | 检索 Milvus 政策文档知识库，返回相关片段 | query：检索的问题或关键词 |
+
+### 接入方式
+
+- **端点**：http://<服务器IP>:8081/mcp（Streamable HTTP 传输，protocol: STATELESS）
+- **服务名**：spring-ai-rag-mcp v1.0.0
+- 在支持 MCP 的客户端中配置为 **Streamable HTTP / SSE** 类型服务器即可，工具自动发现（无需手动填工具清单）。
+
+### MCP 配置（application.yml）
+
+`yaml
+spring:
+  ai:
+    mcp:
+      server:
+        enabled: true
+        protocol: STATELESS   # 无状态模式，无需维护会话
+        name: spring-ai-rag-mcp
+        version: 1.0.0
+        type: SYNC
+        capabilities:
+          tool: true          # 发布 @Tool 工具
+          resource: false
+          prompt: false
+        streamable-http:
+          mcp-endpoint: /mcp  # 传输端点
+`
+
+### 快速自测（curl）
+
+`ash
+# 1. 握手
+curl -X POST http://localhost:8081/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
+
+# 2. 列出工具
+curl -X POST http://localhost:8081/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+
+# 3. 调用天气工具
+curl -X POST http://localhost:8081/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"getWeather","arguments":{"location":"西安"}}}'
+`
+
+### 工具注册机制
+
+工具以 @Tool 注解方法定义（WeatherTools / KnowledgeBaseTools），由 ToolConfig 汇总为一个 ToolCallbackProvider Bean：
+
+- **本地 ChatClient**：通过 defaultToolCallbacks(provider) 绑定，供 /api/weather/stream 等接口使用；
+- **MCP Server**：Spring AI 自动收集所有 ToolCallbackProvider Bean 并发布为 MCP 工具（同一套工具、两种消费方式）。
+
+### 版本升级说明（1.0.0-M6 → 1.1.8）
+
+- Spring Boot 3.4.3 → 3.5.15（1.1.8 官方配套版本）
+- Starter 更名：spring-ai-ollama-spring-boot-starter → spring-ai-starter-model-ollama，spring-ai-openai-spring-boot-starter → spring-ai-starter-model-openai，spring-ai-milvus-store-spring-boot-starter → spring-ai-starter-vector-store-milvus
+- 新增依赖：spring-ai-starter-mcp-server-webmvc
+- API 变更：TokenTextSplitter 改 Builder 风格；对话记忆 InMemoryChatMemory → InMemoryChatMemoryRepository + MessageWindowChatMemory；工具绑定 defaultTools(Object...) → defaultToolCallbacks(ToolCallbackProvider...)
+- Maven 编译插件开启 <parameters>true</parameters>，保证 @ToolParam 参数名（如 location）正确发布到 MCP schema
+
+---## 🔗 项目资源与开源贡献
 
 *   **在线演示地址**：[http://8.140.221.150/](http://8.140.221.150/)
 *   **GitHub 仓库矩阵**：

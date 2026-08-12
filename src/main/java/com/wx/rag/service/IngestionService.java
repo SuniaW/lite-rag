@@ -21,7 +21,14 @@ public class IngestionService {
     private final VectorStore vectorStore;
 
     // 1. 提炼分词器参数：400 Token 是 0.5b/1.5b 模型的黄金分割点
-    private final TokenTextSplitter splitter = new TokenTextSplitter(400, 100, 5, 10000, true);
+    // 1.1.x 改用 Builder 风格（5 参构造器已移除）
+    private final TokenTextSplitter splitter = TokenTextSplitter.builder()
+        .withChunkSize(400)
+        .withMinChunkSizeChars(100)
+        .withMinChunkLengthToEmbed(5)
+        .withMaxNumChunks(10000)
+        .withKeepSeparator(true)
+        .build();
 
     public void processDocuments(MultipartFile[] files) {
         long totalStartTime = System.currentTimeMillis();
@@ -30,7 +37,9 @@ public class IngestionService {
         // 2. 逐个文件处理代替全量并行解析
         // 理由：Tika 解析非常吃内存。在 4G 环境下，如果并行解析多个大 PDF，容易瞬间触发 OOM 杀掉 Java 进程
         for (MultipartFile file : files) {
-            if (file.isEmpty()) continue;
+            if (file.isEmpty()) {
+                continue;
+            }
 
             String fileName = file.getOriginalFilename();
             long fileStartTime = System.currentTimeMillis();

@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  spring-ai-rag:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spring-ai-rag
+    image: ${APP_IMAGE_NAME}:latest
+    ports:
+      - "8081:8081"
+    environment:
+      # 关键：将 .env 里的变量传入容器
+      - CLOUD_IP=${CLOUD_IP}
+      - SPRING_PROFILES_ACTIVE=prod
+      # 开启 Java 21 虚拟线程
+      - SPRING_THREADS_VIRTUAL_ENABLED=true
+    deploy:
+      resources:
+        limits:
+          # 考虑到启动开销，建议给 512M，稳定后可调低
+          memory: 256M
+    restart: always
+    # 如果你的 Milvus 也是用 Compose 启动的，可以取消下面注释来确保启动顺序
+    # depends_on:
+    #   - milvus-standalone
+
+networks:
+  default:
+    name: milvus_network # 确保 Java 和 Milvus 在同一个网络名下
+    external: true       # 假设 Milvus 网络已经存在

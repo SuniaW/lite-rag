@@ -3,7 +3,9 @@ package com.wx.rag.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.InMemoryChatMemory;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -23,6 +25,12 @@ public class RagService {
     private final VectorStore vectorStore;
 
     // 1. 提炼系统提示词：指令越短，小模型 prefill（预热）速度越快
+    // 1.5 对话记忆：1.1.x 中 InMemoryChatMemory 已拆分为 ChatMemory + ChatMemoryRepository
+    private static final ChatMemory CHAT_MEMORY = MessageWindowChatMemory.builder()
+        .chatMemoryRepository(new InMemoryChatMemoryRepository()) // 内存持久化，重启即失
+        .maxMessages(50)                                          // 窗口大小，控制上下文长度
+        .build();
+
     private static final String SYSTEM_PROMPT = """
         你是专业架构师。请基于背景资料回答，要求：
         1. Markdown 格式。标题前空行。
@@ -34,7 +42,7 @@ public class RagService {
     public RagService(OllamaChatModel ollamaChatModel, VectorStore vectorStore) {
         this.vectorStore = vectorStore;
         this.chatClient = ChatClient.builder(ollamaChatModel).defaultSystem(SYSTEM_PROMPT)
-            .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory())).build();
+            .defaultAdvisors(MessageChatMemoryAdvisor.builder(CHAT_MEMORY).build()).build();
     }
 
     public Flux<String> streamAnswer(String query, String chatId) {
@@ -62,7 +70,7 @@ public class RagService {
             // 5. 调用流式生成
             return chatClient.prompt()
                 .user(u -> u.text("背景：{context}\n问题：{query}").param("query", query).param("context", context))
-                .advisors(a -> a.param(MessageChatMemoryAdvisor.DEFAULT_CHAT_MEMORY_CONVERSATION_ID, chatId)).stream()
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, chatId)).stream()
                 .content().doOnComplete(
                     () -> log.info("RagService 全流程总耗时: {}ms", (System.currentTimeMillis() - startTime)));
         }).onErrorResume(e -> {
